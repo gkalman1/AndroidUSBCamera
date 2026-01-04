@@ -3,27 +3,36 @@ jdk:
 
 before_install:
   - set -euxo pipefail
-  - echo "JAVA_HOME=$JAVA_HOME"
   - echo "ANDROID_HOME=$ANDROID_HOME"
+  - echo "JAVA_HOME=$JAVA_HOME"
 
-  # The old sdkmanager lives here on JitPack images
-  - yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses
-  - $ANDROID_HOME/tools/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+  # Ensure modern cmdline-tools sdkmanager exists (avoid deprecated tools/bin/sdkmanager)
+  - curl -L -o cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+  - mkdir -p "$ANDROID_HOME/cmdline-tools"
+  - unzip -q cmdline.zip -d "$ANDROID_HOME/cmdline-tools"
+  - rm -rf "$ANDROID_HOME/cmdline-tools/latest"
+  - mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+  - rm -f cmdline.zip
+  - export SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
 
-  # Install legacy NDK into ndk-bundle
+  - yes | "$SDKMANAGER" --licenses
+  - "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+  # Install legacy NDK into ndk-bundle (common for older AGP checks)
   - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
   - unzip -q ndk.zip
   - rm -rf "$ANDROID_HOME/ndk-bundle"
   - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
   - rm -f ndk.zip
 
-  # Force Gradle/AGP to use this NDK
+  # Force Gradle/AGP to use THIS NDK
   - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
 
-  # sanity checks
+  # sanity
   - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
   - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
   - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
-  - ./gradlew clean publishToMavenLocal -x test
+  # JitPack will publish all modules if the buildoot build publishes; publishToMavenLocal is fine
+  - ./gradlew --no-daemon clean build publishToMavenLocal -x test
