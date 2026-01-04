@@ -1,43 +1,29 @@
 jdk:
-  - openjdk11
+  - openjdk8
 
 before_install:
-  - |
-    set -euxo pipefail
+  - set -euxo pipefail
+  - echo "JAVA_HOME=$JAVA_HOME"
+  - echo "ANDROID_HOME=$ANDROID_HOME"
 
-    echo "ANDROID_HOME=$ANDROID_HOME"
-    echo "JAVA_HOME=$JAVA_HOME"
+  # The old sdkmanager lives here on JitPack images
+  - yes | $ANDROID_HOME/tools/bin/sdkmanager --licenses
+  - $ANDROID_HOME/tools/bin/sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-    # Locate sdkmanager (path differs by image)
-    if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-      SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-    elif [ -x "$ANDROID_HOME/tools/bin/sdkmanager" ]; then
-      SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
-    else
-      echo "sdkmanager not found under ANDROID_HOME. Searching..."
-      find "$ANDROID_HOME" -maxdepth 6 -name sdkmanager -type f || true
-      exit 1
-    fi
-    echo "Using sdkmanager at: $SDKMANAGER"
+  # Install legacy NDK into ndk-bundle
+  - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
+  - unzip -q ndk.zip
+  - rm -rf "$ANDROID_HOME/ndk-bundle"
+  - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
+  - rm -f ndk.zip
 
-    yes | "$SDKMANAGER" --licenses
-    "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+  # Force Gradle/AGP to use this NDK
+  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
 
-    # Install legacy NDK into ndk-bundle (more compatible with older Android Gradle Plugin checks)
-    curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
-    unzip -q ndk.zip
-    rm -rf "$ANDROID_HOME/ndk-bundle"
-    mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
-    rm -f ndk.zip
-
-    # Force Gradle/AGP to use THIS NDK
-    printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
-
-    # Hard validation so the log shows what exists
-    test -f "$ANDROID_HOME/ndk-bundle/source.properties"
-    test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
-    "$ANDROID_HOME/ndk-bundle/ndk-build" --version
-    ls -la "$ANDROID_HOME/ndk-bundle" | head -n 50
+  # sanity checks
+  - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
+  - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
+  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
   - ./gradlew clean publishToMavenLocal -x test
