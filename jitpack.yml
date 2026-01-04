@@ -3,10 +3,12 @@ jdk:
 
 before_install:
   - set -euxo pipefail
+  - pwd
+  - ls -la
   - echo "ANDROID_HOME=$ANDROID_HOME"
   - echo "JAVA_HOME=$JAVA_HOME"
 
-  # Ensure modern cmdline-tools sdkmanager exists (avoid deprecated tools/bin/sdkmanager)
+  # Install modern cmdline-tools sdkmanager (avoid old tools/bin/sdkmanager)
   - curl -L -o cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
   - mkdir -p "$ANDROID_HOME/cmdline-tools"
   - unzip -q cmdline.zip -d "$ANDROID_HOME/cmdline-tools"
@@ -14,25 +16,27 @@ before_install:
   - mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
   - rm -f cmdline.zip
   - export SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
   - yes | "$SDKMANAGER" --licenses
   - "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-  # Install legacy NDK into ndk-bundle (common for older AGP checks)
+  # Install legacy NDK into ndk-bundle (compatible with older AGP that calls ndk-build)
   - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
   - unzip -q ndk.zip
   - rm -rf "$ANDROID_HOME/ndk-bundle"
   - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
   - rm -f ndk.zip
+  - chmod +x "$ANDROID_HOME/ndk-bundle/ndk-build" || true
 
-  # Force Gradle/AGP to use THIS NDK
+  # Force Gradle/AGP to see SDK + NDK
   - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
+  - echo "----- local.properties -----"
+  - cat local.properties
 
-  # sanity
+  # Prove ndk-build exists before Gradle runs
   - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
   - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
   - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
-  # JitPack will publish all modules if the buildoot build publishes; publishToMavenLocal is fine
-  - ./gradlew --no-daemon clean build publishToMavenLocal -x test
+  # IMPORTANT: do NOT run "clean" (that triggers :libuvc:ndkClean)
+  - ./gradlew --no-daemon build publishToMavenLocal -x test
