@@ -2,43 +2,23 @@ jdk:
   - openjdk8
 
 before_install:
-  # Adding more diagnostic output
-  - echo "PWD=$(pwd)"
-  - echo "ANDROID_HOME=$ANDROID_HOME"
-  - ls -la
-  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
-  - cat local.properties
-  - ls -la "$ANDROID_HOME/ndk-bundle" || true
-  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
-
+  - echo "USING jitpack.yml"
   - echo "ANDROID_HOME=$ANDROID_HOME"
   - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
   - unzip -q ndk.zip
   - rm -rf "$ANDROID_HOME/ndk-bundle"
   - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
   - rm -f ndk.zip
-
   - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
-
-  # Make NDK discoverable even if libuvc doesn't read local.properties correctly
-  - export ANDROID_NDK_HOME="$ANDROID_HOME/ndk-bundle"
-  - export ANDROID_NDK_ROOT="$ANDROID_HOME/ndk-bundle"
-  - export NDK_HOME="$ANDROID_HOME/ndk-bundle"
-
-  # Sanity checks (these should fail the build early if paths are wrong)
-  - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
-  - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
-  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
-  - pwd
-  - ls -la
   - cat local.properties
+  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
-  - ./gradlew --no-daemon clean \
-    -Pndk.dir="$ANDROID_HOME/ndk-bundle" \
-    -Pgroup="${GROUP}.${ARTIFACT}" \
-    -Pversion="${VERSION}" \
-    :libausbc:publishToMavenLocal \
-    :libnative:publishToMavenLocal \
-    :libuvc:publishToMavenLocal \
-    -x test -x lint -x check
+  - |
+    ./gradlew --no-daemon clean \
+      -Pgroup="${GROUP}.${ARTIFACT}" \
+      -Pversion="${VERSION}" \
+      :libausbc:install \
+      :libnative:install \
+      :libuvc:install \
+      -x test -x lint -x check
