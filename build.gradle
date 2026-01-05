@@ -1,74 +1,91 @@
 import java.util.Properties
 
-def isJitpack = (System.getenv("JITPACK") == "true")
+/*
+ * Root build.gradle for publishing modules to JitPack.
+ *
+ * Goals:
+ *  - Do NOT require :app to build.
+ *  - Ensure JitPack "install" publishes :libausbc, :libnative, :libuvc.
+ *  - Make NDK discovery deterministic (avoid null/ndk-build).
+ *  - On CI/JitPack, avoid building x86/x86_64 in libuvc (prebuilt jpeg-turbo SIMD objects can fail PIC/relocations).
+ */
 
-if (isJitpack) {
-    def androidHome = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
-    if (androidHome) {
-        File sdkDir = new File(androidHome)
+// ----------------------------
+// Bootstrap local.properties
+// ----------------------------
+def androidHome = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+def propsFile = rootProject.file("local.properties")
+Properties props = new Properties()
 
-        // Prefer ndk-bundle, else pick the newest side-by-side NDK under $ANDROID_HOME/ndk/<version>
-        File ndkDir = new File(sdkDir, "ndk-bundle")
-        if (!ndkDir.exists()) {
-            File ndkRoot = new File(sdkDir, "ndk")
-            if (ndkRoot.exists()) {
-                def versions = (ndkRoot.listFiles() ?: [])
-                        .findAll { it.isDirectory() }
-                        .sort { it.name }
-                if (!versions.isEmpty()) {
-                    ndkDir = versions.last()
-                }
-            }
-        }
-
-        File propsFile = rootProject.file("local.properties")
-        Properties props = new Properties()
-        if (propsFile.exists()) {
-            propsFile.withInputStream { props.load(it) }
-        }
-
-        boolean changed = false
-        if (!props.getProperty("sdk.dir")) {
-            props.setProperty("sdk.dir", sdkDir.absolutePath)
-            changed = true
-        }
-
-        // Even if we didn't find an existing NDK folder, write a best-guess path so we never end up with null
-        if (!props.getProperty("ndk.dir")) {
-            def ndkPath = ndkDir.exists()
-                    ? ndkDir.absolutePath
-                    : new File(sdkDir, "ndk-bundle").absolutePath
-            props.setProperty("ndk.dir", ndkPath)
-            changed = true
-        }
-
-        if (changed) {
-            propsFile.withOutputStream { props.store(it, null) }
-            println("JitPack: wrote local.properties with sdk.dir=${props.getProperty('sdk.dir')} ndk.dir=${props.getProperty('ndk.dir')}")
-        } else {
-            println("JitPack: local.properties already had sdk.dir and ndk.dir")
-        }
-    } else {
-        println("JitPack: ANDROID_HOME/ANDROID_SDK_ROOT not set")
-    }
+if (propsFile.exists()) {
+    propsFile.withInputStream { props.load(it) }
 }
 
-// Top-level build file where you can add configuration options libuvccommon to all sub-projects/modules.
+if (androidHome) {
+    File sdkDir = new File(androidHome)
+
+    // Prefer ndk-bundle; else choose newest side-by-side NDK under $ANDROID_HOME/ndk/<version>
+    File ndkDir = new File(sdkDir, "ndk-bundle")
+    if (!ndkDir.exists()) {
+        File ndkRoot = new File(sdkDir, "ndk")
+        if (ndkRoot.exists()) {
+            def versions = (ndkRoot.listFiles() ?: [])
+                    .findAll { it.isDirectory() }
+                    .sort { it.name }
+            if (!versions.isEmpty()) {
+                ndkDir = versions.last()
+            }
+        }
+    }
+
+    boolean changed = false
+
+    if (!props.getProperty("sdk.dir")) {
+        props.setProperty("sdk.dir", sdkDir.absolutePath)
+        changed = true
+    }
+
+    if (!props.getProperty("ndk.dir")) {
+        // If we didn't find an existing NDK folder, still write a best guess to avoid null/ndk-build
+        def ndkPath = ndkDir.exists()
+                ? ndkDir.absolutePath
+                : new File(sdkDir, "ndk-bundle").absolutePath
+        props.setProperty("ndk.dir", ndkPath)
+        changed = true
+    }
+
+    if (changed) {
+        propsFile.withOutputStream { props.store(it, null) }
+        println("Bootstrap: wrote local.properties sdk.dir=${props.getProperty('sdk.dir')} ndk.dir=${props.getProperty('ndk.dir')}")
+    } else {
+        println("Bootstrap: local.properties already contains sdk.dir and ndk.dir")
+    }
+} else {
+    println("Bootstrap: ANDROID_HOME/ANDROID_SDK_ROOT not set; skipping local.properties bootstrap")
+}
+
+// ----------------------------
+// Buildscript
+// ----------------------------
 buildscript {
     repositories {
         google()
         mavenCentral()
         maven { url "https://artifactory.appodeal.com/appodeal-public" }
-        jcenter() // optional: keep only if something truly still needs it
+        // Keep only if you truly need it; otherwise you can remove it later.
+        jcenter()
         maven { url "https://jitpack.io" }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.2.2'
-        classpath 'com.github.dcendents:android-maven-gradle-plugin:2.1'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.20'
+        classpath "com.android.tools.build:gradle:4.2.2"
+        classpath "com.github.dcendents:android-maven-gradle-plugin:2.1"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:1.5.20"
     }
 }
 
+// ----------------------------
+// Repos + shared ext versions
+// ----------------------------
 allprojects {
     repositories {
         google()
@@ -79,45 +96,134 @@ allprojects {
     }
 
     ext {
-        androidXVersion = '1.3.1'
+        androidXVersion = "1.3.1"
         versionCompiler = 29
         versionTarget = 27
         minSdkVersion = 19
         versionCode = 126
-        versionNameString = '3.3.3'
+        versionNameString = "3.3.3"
         javaSourceCompatibility = JavaVersion.VERSION_1_8
         javaTargetCompatibility = JavaVersion.VERSION_1_8
-        supportLibVersion = '27.1.1'
-        versionBuildTool = '30.0.2'
-        kotlinCoreVersion = '1.3.2'
-        kotlinCoroutines = '1.3.9'
-        materialVersion = '1.3.0'
-        constraintlayoutVersion = '2.0.4'
-        lifecycle_version = '2.2.0'
-        quick_version= '2.9.50'
-        dialog_version= '3.2.1'
-        bugly_version = '3.4.4'
-        bugly_native_version = '3.9.0'
+        supportLibVersion = "27.1.1"
+        versionBuildTool = "30.0.2"
+        kotlinCoreVersion = "1.3.2"
+        kotlinCoroutines = "1.3.9"
+        materialVersion = "1.3.0"
+        constraintlayoutVersion = "2.0.4"
+        lifecycle_version = "2.2.0"
+        quick_version = "2.9.50"
+        dialog_version = "3.2.1"
+        bugly_version = "3.4.4"
+        bugly_native_version = "3.9.0"
     }
 }
 
+// ----------------------------
+// Clean
+// ----------------------------
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
+// ----------------------------
+// Publishing config for JitPack
+// ----------------------------
+//
+// JitPack typically invokes:
+//   ./gradlew clean -Pgroup=com.github.USER -Pversion=COMMIT install
+//
+// Make group/version deterministic and consistent across modules.
+//
+def groupBase = (rootProject.findProperty("group") ?: System.getenv("GROUP") ?: "com.github.gkalman1").toString()
+def artifactSuffix = (System.getenv("ARTIFACT") ?: rootProject.name ?: "AndroidUSBCamera").toString()
+def publishVersion = (rootProject.findProperty("version") ?: System.getenv("VERSION") ?: "LOCAL").toString()
 
 subprojects { proj ->
     proj.plugins.withId("com.android.library") {
         proj.apply plugin: "com.github.dcendents.android-maven"
 
-        def groupBase = System.getenv("GROUP") ?: "com.github.gkalman1"
-        def repoName  = System.getenv("ARTIFACT") ?: "AndroidUSBCamera"
-        def ver       = System.getenv("VERSION") ?: "LOCAL"
-
-        proj.group = "${groupBase}.${repoName}"
-        proj.version = ver
+        proj.group = "${groupBase}.${artifactSuffix}"
+        proj.version = publishVersion
     }
 }
 
-tasks.register("publishToMavenLocal") {
-    dependsOn(":libausbc:install", ":libnative:install", ":libuvc:install")
+// ----------------------------
+// Make root "install" aggregate the modules
+// ----------------------------
+def ensureAggregateTask(String name, List<String> dependsOnTasks) {
+    def t = tasks.findByName(name)
+    if (t == null) {
+        t = tasks.create(name: name)
+    }
+    dependsOnTasks.each { dep -> t.dependsOn(dep) }
+    return t
+}
+
+ensureAggregateTask("install", [
+        ":libausbc:install",
+        ":libnative:install",
+        ":libuvc:install"
+])
+
+// Convenience alias (not required by JitPack, but useful locally)
+ensureAggregateTask("publishToMavenLocal", [
+        ":libausbc:install",
+        ":libnative:install",
+        ":libuvc:install"
+])
+
+// ----------------------------
+// libuvc ndk-build hardening (avoid x86/x86_64 on CI/JitPack)
+// ----------------------------
+//
+// The current failure you are hitting is from building x86 native artifacts.
+// For Play Store publishing you only need armeabi-v7a + arm64-v8a.
+//
+// Override knobs (optional):
+//   -PuvcAbis="armeabi-v7a arm64-v8a x86 x86_64"
+//   -PuvcPlatform="android-21"
+//   -PuvcFlexiblePages="true"
+//
+def isCi = (System.getenv("JITPACK") == "true") || (System.getenv("CI") == "true")
+def uvcAbis = (rootProject.findProperty("uvcAbis")
+        ?: System.getenv("UVC_ABIS")
+        ?: (isCi ? "armeabi-v7a arm64-v8a" : "armeabi-v7a arm64-v8a x86 x86_64")
+).toString()
+
+def uvcPlatform = (rootProject.findProperty("uvcPlatform")
+        ?: System.getenv("UVC_PLATFORM")
+        ?: "android-21"
+).toString()
+
+def uvcFlexiblePages = (rootProject.findProperty("uvcFlexiblePages")
+        ?: System.getenv("UVC_FLEX_PAGES")
+        ?: "true"
+).toString()
+
+gradle.projectsEvaluated {
+    if (rootProject.findProject(":libuvc") != null) {
+        project(":libuvc") {
+            tasks.matching { it instanceof Exec && (it.name == "ndkBuild" || it.name == "ndkClean") }.configureEach { Exec t ->
+                // Add ndk-build variable overrides as command-line args so they apply reliably.
+                def cmd = new ArrayList(t.commandLine ?: [])
+                if (!cmd.isEmpty()) {
+                    if (!cmd.any { it.toString().startsWith("APP_ABI=") }) {
+                        cmd.add(1, "APP_ABI=${uvcAbis}")
+                    }
+                    if (!cmd.any { it.toString().startsWith("APP_PLATFORM=") }) {
+                        cmd.add(2, "APP_PLATFORM=${uvcPlatform}")
+                    }
+                    if (!cmd.any { it.toString().startsWith("APP_SUPPORT_FLEXIBLE_PAGE_SIZES=") }) {
+                        cmd.add(3, "APP_SUPPORT_FLEXIBLE_PAGE_SIZES=${uvcFlexiblePages}")
+                    }
+                    t.commandLine = cmd
+                }
+
+                // Also export to environment (harmless if ignored).
+                t.environment("APP_ABI", uvcAbis)
+                t.environment("APP_PLATFORM", uvcPlatform)
+                t.environment("APP_SUPPORT_FLEXIBLE_PAGE_SIZES", uvcFlexiblePages)
+            }
+        }
+    }
 }
