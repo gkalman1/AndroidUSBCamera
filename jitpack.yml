@@ -1,26 +1,22 @@
 jdk:
-  - openjdk8
+  - openjdk8   # keep if you did NOT upgrade AGP/Gradle in the library build
+  # use openjdk17 if you upgraded AGP to 8.x
 
 before_install:
-  - echo "USING jitpack.yml"
-  - echo "ANDROID_HOME=$ANDROID_HOME"
-  - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
+  - echo "JITPACK=$JITPACK GROUP=$GROUP ARTIFACT=$ARTIFACT VERSION=$VERSION"
+  # Strongly recommended for Play Store / targetSdk 35 native compatibility:
+  # NDK r22 and lower is not compatible with 16 KB requirements. :contentReference[oaicite:1]{index=1}
+  - wget -O ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
   - unzip -q ndk.zip
-  - rm -rf "$ANDROID_HOME/ndk-bundle"
-  - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
+  - rm -rf $ANDROID_HOME/ndk-bundle
+  - mv android-ndk-r28c $ANDROID_HOME/ndk-bundle
   - rm -f ndk.zip
-  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
-  - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
-  - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
-  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
+  - echo "sdk.dir=$ANDROID_HOME" > local.properties
+  - echo "ndk.dir=$ANDROID_HOME/ndk-bundle" >> local.properties
 
 install:
-  - echo "GROUP=$GROUP ARTIFACT=$ARTIFACT VERSION=$VERSION"
-  - ./gradlew \
-    -Pgroup="${GROUP}.${ARTIFACT}" \
-    -Pversion="${VERSION}" \
-    :libausbc:publishToMavenLocal \
+  - ./gradlew --no-daemon clean \
     :libnative:publishToMavenLocal \
     :libuvc:publishToMavenLocal \
-    -x test -x lint \
-    -x :app:lintVitalRelease -x :app:lintRelease -x :app:lintDebug
+    :libausbc:publishToMavenLocal \
+    -x test -x lint -x check

@@ -1,7 +1,6 @@
-include ':app'
+include ':libausbc', ':libnative', ':libuvc'
 
-// For debug online
-include ':libausbc'
-include ':libuvc'
-include ':libnative'
-
+// JitPack sets an env var you can key off of
+if (System.getenv("JITPACK") != "true") {
+    include ':app'
+}
