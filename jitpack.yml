@@ -20,3 +20,4 @@ install:
       :libnative:install \
       :libuvc:install \
       -x test -x lint -x check
+
