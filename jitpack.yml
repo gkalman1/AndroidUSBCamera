@@ -16,4 +16,11 @@ before_install:
 
 install:
   - echo "GROUP=$GROUP ARTIFACT=$ARTIFACT VERSION=$VERSION"
-  - ./gradlew -Pgroup="${GROUP}.${ARTIFACT}" -Pversion="${VERSION}" publishToMavenLocal -xtest -xlint
+  - ./gradlew \
+    -Pgroup="${GROUP}.${ARTIFACT}" \
+    -Pversion="${VERSION}" \
+    :libausbc:publishToMavenLocal \
+    :libnative:publishToMavenLocal \
+    :libuvc:publishToMavenLocal \
+    -x test -x lint \
+    -x :app:lintVitalRelease -x :app:lintRelease -x :app:lintDebug
