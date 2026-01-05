@@ -694,7 +694,7 @@ public final class USBMonitor {
 	 * @param serial	UsbDeviceConnection#getSerialで取得したシリアル番号を渡す, nullでuseNewAPI=trueでAPI>=21なら内部で取得
 	 * @param useNewAPI API>=21またはAPI>=23のみで使用可能なメソッドも使用する(ただし機器によってはnullが返ってくるので有効かどうかは機器による)
 	 * @return
-	 */ 
+	 */
 	@SuppressLint("NewApi")
 	public static final String getDeviceKeyName(final UsbDevice device, final String serial, final boolean useNewAPI) {
 		if (device == null) return "";

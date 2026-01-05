@@ -46,3 +46,27 @@ ext {
     bugly_version = '3.4.4'
     bugly_native_version = '3.9.0'
 }
+
+subprojects { proj ->
+    proj.plugins.withId("com.android.library") {
+        proj.apply plugin: "maven-publish"
+
+        proj.afterEvaluate {
+            publishing {
+                publications {
+                    release(MavenPublication) {
+                        // JitPack sets GROUP=com.github.<user>, ARTIFACT=<repo>, VERSION=<tag|commit>
+                        def groupBase = System.getenv("GROUP") ?: "com.github.gkalman1"
+                        def artifactRepo = System.getenv("ARTIFACT") ?: "AndroidUSBCamera"
+                        groupId = "${groupBase}.${artifactRepo}"
+
+                        artifactId = proj.name
+                        version = System.getenv("VERSION") ?: "LOCAL"
+
+                        from components.release
+                    }
+                }
+            }
+        }
+    }
+}

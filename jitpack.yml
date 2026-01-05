@@ -2,45 +2,18 @@ jdk:
   - openjdk8
 
 before_install:
-  - set -euxo pipefail
-  - echo "CUSTOM_JITPACK_YML_ACTIVE"
+  - echo "USING jitpack.yml"
   - echo "ANDROID_HOME=$ANDROID_HOME"
-  - echo "JAVA_HOME=$JAVA_HOME"
-
-  # Install modern cmdline-tools (avoid old tools/bin/sdkmanager issues)
-  - curl -L -o cmdline.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-  - mkdir -p "$ANDROID_HOME/cmdline-tools"
-  - unzip -q cmdline.zip -d "$ANDROID_HOME/cmdline-tools"
-  - rm -rf "$ANDROID_HOME/cmdline-tools/latest"
-  - mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-  - rm -f cmdline.zip
-  - export SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-  - yes | "$SDKMANAGER" --licenses
-  - "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-  # Install legacy NDK into ndk-bundle (many older builds expect ndk-build here)
   - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
   - unzip -q ndk.zip
   - rm -rf "$ANDROID_HOME/ndk-bundle"
   - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
   - rm -f ndk.zip
-
-  - export ANDROID_NDK_HOME="$ANDROID_HOME/ndk-bundle"
-  - export NDK_HOME="$ANDROID_NDK_HOME"
-
-  # Create local.properties at root AND copy into each module (some scripts look locally)
-  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_NDK_HOME" > local.properties
-  - for d in . libuvc libnative libausbc libutils libuvccommon; do
-    if [ -d "$d" ]; then cp local.properties "$d/local.properties"; fi;
-    done
-
-  # Sanity checks (these lines MUST appear in the JitPack log)
-  - echo "----- local.properties -----"
-  - cat local.properties
-  - test -x "$ANDROID_NDK_HOME/ndk-build"
-  - "$ANDROID_NDK_HOME/ndk-build" --version
+  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
+  - test -f "$ANDROID_HOME/ndk-bundle/source.properties"
+  - test -x "$ANDROID_HOME/ndk-bundle/ndk-build"
+  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
-  # IMPORTANT: don't run clean (clean triggers :libuvc:ndkClean)
-  - ./gradlew --no-daemon build publishToMavenLocal -x test
+  - echo "GROUP=$GROUP ARTIFACT=$ARTIFACT VERSION=$VERSION"
+  - ./gradlew -Pgroup="${GROUP}.${ARTIFACT}" -Pversion="${VERSION}" publishToMavenLocal -xtest -xlint
