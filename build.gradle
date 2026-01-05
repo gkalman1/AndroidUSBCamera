@@ -1,3 +1,58 @@
+import java.util.Properties
+
+def isJitpack = (System.getenv("JITPACK") == "true")
+
+if (isJitpack) {
+    def androidHome = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    if (androidHome) {
+        File sdkDir = new File(androidHome)
+
+        // Prefer ndk-bundle, else pick the newest side-by-side NDK under $ANDROID_HOME/ndk/<version>
+        File ndkDir = new File(sdkDir, "ndk-bundle")
+        if (!ndkDir.exists()) {
+            File ndkRoot = new File(sdkDir, "ndk")
+            if (ndkRoot.exists()) {
+                def versions = (ndkRoot.listFiles() ?: [])
+                        .findAll { it.isDirectory() }
+                        .sort { it.name }
+                if (!versions.isEmpty()) {
+                    ndkDir = versions.last()
+                }
+            }
+        }
+
+        File propsFile = rootProject.file("local.properties")
+        Properties props = new Properties()
+        if (propsFile.exists()) {
+            propsFile.withInputStream { props.load(it) }
+        }
+
+        boolean changed = false
+        if (!props.getProperty("sdk.dir")) {
+            props.setProperty("sdk.dir", sdkDir.absolutePath)
+            changed = true
+        }
+
+        // Even if we didn't find an existing NDK folder, write a best-guess path so we never end up with null
+        if (!props.getProperty("ndk.dir")) {
+            def ndkPath = ndkDir.exists()
+                    ? ndkDir.absolutePath
+                    : new File(sdkDir, "ndk-bundle").absolutePath
+            props.setProperty("ndk.dir", ndkPath)
+            changed = true
+        }
+
+        if (changed) {
+            propsFile.withOutputStream { props.store(it, null) }
+            println("JitPack: wrote local.properties with sdk.dir=${props.getProperty('sdk.dir')} ndk.dir=${props.getProperty('ndk.dir')}")
+        } else {
+            println("JitPack: local.properties already had sdk.dir and ndk.dir")
+        }
+    } else {
+        println("JitPack: ANDROID_HOME/ANDROID_SDK_ROOT not set")
+    }
+}
+
 // Top-level build file where you can add configuration options libuvccommon to all sub-projects/modules.
 buildscript {
     repositories {
