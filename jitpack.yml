@@ -2,6 +2,15 @@ jdk:
   - openjdk8
 
 before_install:
+  # Adding more diagnostic output
+  - echo "PWD=$(pwd)"
+  - echo "ANDROID_HOME=$ANDROID_HOME"
+  - ls -la
+  - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
+  - cat local.properties
+  - ls -la "$ANDROID_HOME/ndk-bundle" || true
+  - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
+
   - echo "ANDROID_HOME=$ANDROID_HOME"
   - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
   - unzip -q ndk.zip
