@@ -15,8 +15,11 @@ before_install:
   - echo "ndk.dir=$ANDROID_HOME/ndk-bundle" >> local.properties
 
 install:
-  - ./gradlew --no-daemon clean \
-    :libnative:publishToMavenLocal \
-    :libuvc:publishToMavenLocal \
-    :libausbc:publishToMavenLocal \
-    -x test -x lint -x check
+  - |
+    ./gradlew --no-daemon clean \
+      -Pgroup="${GROUP}.${ARTIFACT}" \
+      -Pversion="${VERSION}" \
+      :libausbc:publishToMavenLocal \
+      :libnative:publishToMavenLocal \
+      :libuvc:publishToMavenLocal \
+      -x test -x lint -x check
