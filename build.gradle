@@ -1,9 +1,75 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+import java.util.Properties
+
+// ----------------------------
+// local.properties bootstrap (avoid null/ndk-build on CI)
+// ----------------------------
+def bootstrapLocalProperties() {
+    def androidHome = System.getenv("ANDROID_HOME") ?: System.getenv("ANDROID_SDK_ROOT")
+    if (!androidHome) {
+        println("Bootstrap: ANDROID_HOME/ANDROID_SDK_ROOT not set; skipping local.properties bootstrap")
+        return
+    }
+
+    File sdkDir = new File(androidHome)
+    File propsFile = rootProject.file("local.properties")
+
+    Properties props = new Properties()
+    if (propsFile.exists()) {
+        propsFile.withInputStream { props.load(it) }
+    }
+
+    // Prefer ndk-bundle, else newest side-by-side NDK under $ANDROID_HOME/ndk/<version>
+    File ndkDir = new File(sdkDir, "ndk-bundle")
+    if (!ndkDir.exists()) {
+        File ndkRoot = new File(sdkDir, "ndk")
+        if (ndkRoot.exists()) {
+            def versions = (ndkRoot.listFiles() ?: [])
+                    .findAll { it.isDirectory() }
+                    .sort { it.name }
+            if (!versions.isEmpty()) {
+                ndkDir = versions.last()
+            }
+        }
+    }
+
+    boolean changed = false
+    if (!props.getProperty("sdk.dir")) {
+        props.setProperty("sdk.dir", sdkDir.absolutePath)
+        changed = true
+    }
+    if (!props.getProperty("ndk.dir")) {
+        // Write a best-guess path even if not present, to prevent null/ndk-build
+        def ndkPath = ndkDir.exists()
+                ? ndkDir.absolutePath
+                : new File(sdkDir, "ndk-bundle").absolutePath
+        props.setProperty("ndk.dir", ndkPath)
+        changed = true
+    }
+
+    if (changed) {
+        propsFile.withOutputStream { props.store(it, null) }
+        println("Bootstrap: wrote local.properties sdk.dir=${props.getProperty('sdk.dir')} ndk.dir=${props.getProperty('ndk.dir')}")
+    } else {
+        println("Bootstrap: local.properties already contains sdk.dir and ndk.dir")
+    }
+}
+
+bootstrapLocalProperties()
+
+// ----------------------------
+// JitPack publishing coordinates
+// ----------------------------
+def groupBaseProp = (rootProject.findProperty("group") ?: System.getenv("GROUP") ?: "com.github.gkalman1").toString()
+def publishGroup = groupBaseProp.endsWith(".AndroidUSBCamera") ? groupBaseProp : "${groupBaseProp}.AndroidUSBCamera"
+def publishVersion = (rootProject.findProperty("version") ?: System.getenv("VERSION") ?: "LOCAL").toString()
+
+// ----------------------------
+// Buildscript
+// ----------------------------
 buildscript {
     repositories {
         google()
         mavenCentral()
-        // Keep only if you truly need it; otherwise you can remove later
         maven { url "https://artifactory.appodeal.com/appodeal-public" }
         jcenter()
         maven { url "https://jitpack.io" }
@@ -15,6 +81,9 @@ buildscript {
     }
 }
 
+// ----------------------------
+// Repos + shared ext (MUST be visible to :libuvc)
+// ----------------------------
 allprojects {
     repositories {
         google()
@@ -23,68 +92,97 @@ allprojects {
         jcenter()
         maven { url "https://jitpack.io" }
     }
+
+    // These must exist on each project, because libuvc references them unqualified.
+    ext {
+        // Compile SDK must be >= 33 if your code references TIRAMISU / RECEIVER_NOT_EXPORTED, etc.
+        // If your libuvc code does not reference those, you can lower it; 33 is the safe baseline.
+        versionCompiler = 33
+        versionTarget = 33
+        minSdkVersion = 19
+
+        // This is what was missing in the failing build log.
+        versionBuildTool = "30.0.2"
+
+        // Keep the rest as needed by modules
+        androidXVersion = "1.3.1"
+        versionCode = 126
+        versionNameString = "3.3.3"
+        javaSourceCompatibility = JavaVersion.VERSION_1_8
+        javaTargetCompatibility = JavaVersion.VERSION_1_8
+        supportLibVersion = "27.1.1"
+        kotlinCoreVersion = "1.3.2"
+        kotlinCoroutines = "1.3.9"
+        materialVersion = "1.3.0"
+        constraintlayoutVersion = "2.0.4"
+        lifecycle_version = "2.2.0"
+        quick_version = "2.9.50"
+        dialog_version = "3.2.1"
+        bugly_version = "3.4.4"
+        bugly_native_version = "3.9.0"
+    }
 }
 
-/**
- * IMPORTANT:
- * - compileSdk must be >= 33 because your USBMonitor.java references:
- *   - Build.VERSION_CODES.S (31)
- *   - Build.VERSION_CODES.TIRAMISU (33)
- *   - PendingIntent.FLAG_MUTABLE (31)
- *   - Context.RECEIVER_NOT_EXPORTED (33)
- *
- * Your app can targetSdk 35 for Play; the library can compileSdk 33+ and still be consumed fine.
- */
-ext {
-    androidXVersion = "1.3.1"
-
-    // Must be 33+ for those symbols to exist at compile time
-    versionCompiler = 33
-    versionTarget = 33
-
-    // Keep as-is unless you intentionally want to raise minSdk
-    minSdkVersion = 19
-
-    versionCode = 126
-    versionNameString = "3.3.3"
-
-    javaSourceCompatibility = JavaVersion.VERSION_1_8
-    javaTargetCompatibility = JavaVersion.VERSION_1_8
-
-    supportLibVersion = "27.1.1"
-    // versionBuildTool = "27.0.3"
-
-    kotlinCoreVersion = "1.3.2"
-    kotlinCoroutines = "1.3.9"
-
-    materialVersion = "1.3.0"
-    constraintlayoutVersion = "2.0.4"
-    lifecycle_version = "2.2.0"
-
-    quick_version = "2.9.50"
-    dialog_version = "3.2.1"
-    bugly_version = "3.4.4"
-    bugly_native_version = "3.9.0"
-}
-
+// ----------------------------
+// Clean
+// ----------------------------
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
-/**
- * Make sure JitPack coordinates are stable and match what JitPack passes:
- * JitPack invokes Gradle with -Pgroup=... and -Pversion=...
- */
+// ----------------------------
+// Apply android-maven to each library module so :module:install exists
+// ----------------------------
 subprojects { proj ->
     proj.plugins.withId("com.android.library") {
         proj.apply plugin: "com.github.dcendents.android-maven"
+        proj.group = publishGroup
+        proj.version = publishVersion
+    }
+}
 
-        // JitPack passes these as Gradle properties (-Pgroup, -Pversion)
-        def groupBase = (rootProject.findProperty("group") ?: "com.github.gkalman1").toString()
-        def repoName  = "AndroidUSBCamera"
-        def ver       = (rootProject.findProperty("version") ?: "LOCAL").toString()
+// ----------------------------
+// Root publishing tasks for JitPack default command
+// ----------------------------
+tasks.register("install") {
+    dependsOn ":libausbc:install", ":libnative:install", ":libuvc:install"
+}
 
-        proj.group = "${groupBase}.${repoName}"
-        proj.version = ver
+tasks.register("publishToMavenLocal") {
+    dependsOn ":libausbc:install", ":libnative:install", ":libuvc:install"
+}
+
+// ----------------------------
+// Harden libuvc ndk-build on CI/JitPack: build only ARM ABIs
+// ----------------------------
+def isCi = (System.getenv("JITPACK") == "true") || (System.getenv("CI") == "true")
+
+// Defaults: CI -> arm only; local -> all common ABIs
+def uvcAbis = (rootProject.findProperty("uvcAbis")
+        ?: System.getenv("UVC_ABIS")
+        ?: (isCi ? "armeabi-v7a arm64-v8a" : "armeabi-v7a arm64-v8a x86 x86_64")
+).toString()
+
+def uvcPlatform = (rootProject.findProperty("uvcPlatform")
+        ?: System.getenv("UVC_PLATFORM")
+        ?: "android-21"
+).toString()
+
+def uvcFlexiblePages = (rootProject.findProperty("uvcFlexiblePages")
+        ?: System.getenv("UVC_FLEX_PAGES")
+        ?: "true"
+).toString()
+
+gradle.projectsEvaluated {
+    if (rootProject.findProject(":libuvc") != null) {
+        def p = project(":libuvc")
+        ["ndkBuild", "ndkClean"].each { tname ->
+            def t = p.tasks.findByName(tname)
+            if (t instanceof Exec) {
+                t.environment("APP_ABI", uvcAbis)
+                t.environment("APP_PLATFORM", uvcPlatform)
+                t.environment("APP_SUPPORT_FLEXIBLE_PAGE_SIZES", uvcFlexiblePages)
+            }
+        }
     }
 }

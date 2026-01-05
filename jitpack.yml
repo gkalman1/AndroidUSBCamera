@@ -2,17 +2,17 @@ jdk:
   - openjdk8
 
 before_install:
-  - echo "USING jitpack.yml"
+  - echo "Using jitpack.yml"
   - echo "ANDROID_HOME=$ANDROID_HOME"
+  - echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
 
-  # Ensure the Android platform/build-tools needed for compileSdk 33 exist
+  # Ensure compileSdk 33 components exist (safe baseline)
   - |
     set -e
     SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
     if [ ! -x "$SDKMANAGER" ]; then
       SDKMANAGER="$ANDROID_HOME/tools/bin/sdkmanager"
     fi
-
     if [ -x "$SDKMANAGER" ]; then
       yes | "$SDKMANAGER" --licenses
       "$SDKMANAGER" "platforms;android-33" "build-tools;33.0.2" "platform-tools"
@@ -20,22 +20,26 @@ before_install:
       echo "sdkmanager not found; relying on preinstalled Android SDK components"
     fi
 
-  # Pin NDK to r20b (matches your existing approach)
-  - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r20b-linux-x86_64.zip
+  # Install an NDK with ndk-build into $ANDROID_HOME/ndk-bundle
+  - curl -L -o ndk.zip https://dl.google.com/android/repository/android-ndk-r22b-linux-x86_64.zip
   - unzip -q ndk.zip
   - rm -rf "$ANDROID_HOME/ndk-bundle"
-  - mv android-ndk-r20b "$ANDROID_HOME/ndk-bundle"
+  - mv android-ndk-r22b "$ANDROID_HOME/ndk-bundle"
   - rm -f ndk.zip
 
-  # Make Gradle/NDK discovery deterministic
+  # Deterministic Gradle discovery (some module scripts still rely on ndk.dir)
   - printf "sdk.dir=%s\nndk.dir=%s\n" "$ANDROID_HOME" "$ANDROID_HOME/ndk-bundle" > local.properties
   - cat local.properties
   - "$ANDROID_HOME/ndk-bundle/ndk-build" --version
 
 install:
   - |
+    export UVC_ABIS="armeabi-v7a arm64-v8a"
+    export UVC_PLATFORM="android-21"
+    export UVC_FLEX_PAGES="true"
+
     ./gradlew --no-daemon clean \
-      :libausbc:install \
-      :libnative:install \
-      :libuvc:install \
+      -Pgroup="${GROUP}" \
+      -Pversion="${VERSION}" \
+      publishToMavenLocal \
       -x test -x lint -x check
