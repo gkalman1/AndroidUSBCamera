@@ -19,8 +19,30 @@ allprojects {
         google()
         mavenCentral()
         maven { url "https://artifactory.appodeal.com/appodeal-public" }
-        jcenter() // optional
+        jcenter()
         maven { url "https://jitpack.io" }
+    }
+
+    ext {
+        androidXVersion = '1.3.1'
+        versionCompiler = 29
+        versionTarget = 27
+        minSdkVersion = 19
+        versionCode = 126
+        versionNameString = '3.3.3'
+        javaSourceCompatibility = JavaVersion.VERSION_1_8
+        javaTargetCompatibility = JavaVersion.VERSION_1_8
+        supportLibVersion = '27.1.1'
+        // versionBuildTool = '27.0.3'
+        kotlinCoreVersion = '1.3.2'
+        kotlinCoroutines = '1.3.9'
+        materialVersion = '1.3.0'
+        constraintlayoutVersion = '2.0.4'
+        lifecycle_version = '2.2.0'
+        quick_version= '2.9.50'
+        dialog_version= '3.2.1'
+        bugly_version = '3.4.4'
+        bugly_native_version = '3.9.0'
     }
 }
 
@@ -28,37 +50,15 @@ task clean(type: Delete) {
     delete rootProject.buildDir
 }
 
-ext {
-    androidXVersion = '1.3.1'
-    versionCompiler = 29
-    versionTarget = 27
-    minSdkVersion = 19
-    versionCode = 126
-    versionNameString = '3.3.3'
-    javaSourceCompatibility = JavaVersion.VERSION_1_8
-    javaTargetCompatibility = JavaVersion.VERSION_1_8
-//    ndkVersion = '21.0.6113669'
-    supportLibVersion = '27.1.1'
-//    versionBuildTool = '27.0.3'
-    kotlinCoreVersion = '1.3.2'
-    kotlinCoroutines = '1.3.9'
-    materialVersion = '1.3.0'
-    constraintlayoutVersion = '2.0.4'
-    lifecycle_version = '2.2.0'
-    quick_version= '2.9.50'
-    dialog_version= '3.2.1'
-    bugly_version = '3.4.4'
-    bugly_native_version = '3.9.0'
-}
-
 subprojects { proj ->
     proj.plugins.withId("com.android.library") {
         proj.apply plugin: "com.github.dcendents.android-maven"
 
         def groupBase = System.getenv("GROUP") ?: "com.github.gkalman1"
-        def artifactRepo = System.getenv("ARTIFACT") ?: "AndroidUSBCamera"
+        def repoName  = System.getenv("ARTIFACT") ?: "AndroidUSBCamera"
+        def ver       = System.getenv("VERSION") ?: "LOCAL"
 
-        proj.group = "${groupBase}.${artifactRepo}"
-        proj.version = System.getenv("VERSION") ?: "LOCAL"
+        proj.group = "${groupBase}.${repoName}"
+        proj.version = ver
     }
 }

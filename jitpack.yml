@@ -16,8 +16,6 @@ before_install:
 install:
   - |
     ./gradlew --no-daemon clean \
-      -Pgroup="${GROUP}.${ARTIFACT}" \
-      -Pversion="${VERSION}" \
       :libausbc:install \
       :libnative:install \
       :libuvc:install \
